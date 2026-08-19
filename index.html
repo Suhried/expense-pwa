@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Expenses"/>
+  <meta name="theme-color" content="#007AFF"/>
+  <title>Expense Tracker</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div id="app">
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <span id="clock">9:41</span>
+    <div style="display:flex;align-items:center;gap:5px;font-size:13px">
+      <svg width="16" height="12" fill="currentColor" viewBox="0 0 16 12"><rect x="0" y="3" width="3" height="9" rx="0.5"/><rect x="4.5" y="1.5" width="3" height="10.5" rx="0.5"/><rect x="9" y="0" width="3" height="12" rx="0.5"/><rect x="13.5" y="0" width="2.5" height="12" rx="0.5" opacity="0.3"/></svg>
+      <svg width="25" height="12" fill="none" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="currentColor" stroke-opacity="0.35"/><rect x="2" y="2" width="17" height="8" rx="2" fill="currentColor"/><path d="M23 4v4a2 2 0 000-4z" fill="currentColor" opacity="0.4"/></svg>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 0: DASHBOARD ────────────────────────────────────────────── -->
+  <div class="screen active" id="screen-0">
+    <div class="scroll">
+      <div class="nav">
+        <div class="nav-row">
+          <span></span>
+          <button class="nav-btn" onclick="openAdd()">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            Add
+          </button>
+        </div>
+        <div class="nav-title-large">Expenses</div>
+      </div>
+
+      <!-- Hero -->
+      <div class="hero">
+        <div class="hero-month">This Month</div>
+        <div class="hero-amount" id="hero-month">$0.00</div>
+        <div class="hero-stats">
+          <div class="hero-stat"><label>Today</label><span id="hero-today">$0.00</span></div>
+          <div class="hero-stat"><label>Transactions</label><span id="hero-count">0</span></div>
+        </div>
+        <div class="sparkline" id="sparkline"></div>
+      </div>
+
+      <!-- Categories -->
+      <div class="section-hdr"><h2>By Category</h2></div>
+      <div class="card" id="cat-list"></div>
+
+      <!-- Recent -->
+      <div class="section-hdr">
+        <h2>Recent</h2>
+        <button onclick="switchTab(1)">See All</button>
+      </div>
+      <div class="card" id="recent-list"></div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 1: TRANSACTIONS ─────────────────────────────────────────── -->
+  <div class="screen" id="screen-1">
+    <div class="scroll">
+      <div class="nav">
+        <div class="nav-row">
+          <span></span>
+          <button class="nav-btn" onclick="openAdd()">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            Add
+          </button>
+        </div>
+        <div class="nav-title-large">Transactions</div>
+      </div>
+
+      <div class="search-bar">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" placeholder="Search expenses" oninput="onSearch(this.value)" />
+      </div>
+
+      <div class="seg">
+        <button class="seg-btn active" onclick="setFilter('all',this)">All</button>
+        <button class="seg-btn" onclick="setFilter('week',this)">Week</button>
+        <button class="seg-btn" onclick="setFilter('month',this)">Month</button>
+      </div>
+      <div style="height:10px"></div>
+
+      <div id="txn-groups"></div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 2: ANALYTICS ────────────────────────────────────────────── -->
+  <div class="screen" id="screen-2">
+    <div class="scroll">
+      <div class="nav">
+        <div class="nav-row"><span class="nav-title-large" style="font-size:17px;font-weight:600">Analytics</span></div>
+        <div class="nav-title-large">Analytics</div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div style="height:8px"></div>
+      <div class="stats-grid">
+        <div class="stat-cell"><div class="stat-label">Avg Daily</div><div class="stat-val" id="stat-avg">$0</div></div>
+        <div class="stat-cell"><div class="stat-label">Highest Day</div><div class="stat-val" id="stat-high">$0</div></div>
+        <div class="stat-cell"><div class="stat-label">This Month</div><div class="stat-val" id="stat-month">$0</div></div>
+        <div class="stat-cell"><div class="stat-label">Top Category</div><div class="stat-val" style="font-size:15px" id="stat-top">—</div></div>
+      </div>
+
+      <!-- Bar chart -->
+      <div class="chart-wrap">
+        <div class="chart-title">Daily Spending — Last 7 Days</div>
+        <div class="bar-chart" id="bar-chart"></div>
+      </div>
+
+      <!-- Donut -->
+      <div class="chart-wrap">
+        <div class="chart-title">Spending by Category</div>
+        <div class="donut-wrap"><canvas id="donut" width="160" height="160"></canvas></div>
+        <div id="legend"></div>
+      </div>
+
+      <!-- Monthly -->
+      <div class="chart-wrap">
+        <div class="chart-title">Monthly Trend</div>
+        <div class="monthly-chart" id="monthly-chart"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCREEN 3: SETTINGS ─────────────────────────────────────────────── -->
+  <div class="screen" id="screen-3">
+    <div class="scroll">
+      <div class="nav">
+        <div class="nav-row"><span></span></div>
+        <div class="nav-title-large">Settings</div>
+      </div>
+
+      <div style="height:8px"></div>
+      <div class="settings-section-hdr">Preferences</div>
+      <div class="card">
+        <div class="list-row">
+          <div style="width:32px;height:32px;border-radius:8px;background:#007AFF;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px">$</div>
+          <div style="flex:1;font-size:16px">Currency</div>
+          <select id="currency-select" style="border:none;background:none;font-size:16px;font-family:var(--sf);color:var(--label2);cursor:pointer;outline:none">
+            <option value="USD">🇺🇸 USD</option>
+            <option value="BDT">🇧🇩 BDT</option>
+            <option value="EUR">🇪🇺 EUR</option>
+            <option value="GBP">🇬🇧 GBP</option>
+            <option value="JPY">🇯🇵 JPY</option>
+            <option value="INR">🇮🇳 INR</option>
+          </select>
+        </div>
+        <div class="list-row">
+          <div style="width:32px;height:32px;border-radius:8px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:17px">🔔</div>
+          <div style="flex:1;font-size:16px">Notifications</div>
+          <button class="toggle off" id="t-notif"></button>
+        </div>
+        <div class="list-row">
+          <div style="width:32px;height:32px;border-radius:8px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:17px">🔒</div>
+          <div style="flex:1;font-size:16px">Face ID</div>
+          <button class="toggle on" id="t-faceid"></button>
+        </div>
+      </div>
+
+      <div class="settings-section-hdr">Data</div>
+      <div class="card">
+        <div class="list-row" onclick="exportCSV()" style="cursor:pointer">
+          <div style="width:32px;height:32px;border-radius:8px;background:#5856D6;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px">↑</div>
+          <div style="flex:1;font-size:16px">Export CSV</div>
+          <span class="chevron">›</span>
+        </div>
+        <div class="list-row" style="cursor:pointer">
+          <div style="width:32px;height:32px;border-radius:8px;background:#5AC8FA;display:flex;align-items:center;justify-content:center;font-size:17px">☁️</div>
+          <div style="flex:1;font-size:16px">iCloud Backup</div>
+          <span class="chevron">›</span>
+        </div>
+      </div>
+
+      <div class="settings-section-hdr">Statistics</div>
+      <div class="card" id="stats-info"></div>
+
+      <div class="settings-section-hdr"></div>
+      <div class="card">
+        <div class="list-row" onclick="clearAllData()" style="cursor:pointer">
+          <div style="flex:1;font-size:16px;color:var(--red)">Clear All Data</div>
+        </div>
+      </div>
+
+      <div class="settings-section-hdr">About</div>
+      <div class="card">
+        <div class="list-row"><div style="flex:1;font-size:16px">Version</div><span class="settings-val">1.0.0</span></div>
+        <div class="list-row"><div style="flex:1;font-size:16px">Storage</div><span class="settings-val">On-device</span></div>
+        <div class="list-row"><div style="flex:1;font-size:16px">Offline</div><span class="settings-val" style="color:var(--green)">✓ Ready</span></div>
+      </div>
+      <div style="height:20px"></div>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <button class="tab-item active" data-tab="0">
+      <span class="tab-icon">
+        <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><rect x="2" y="3" width="9" height="10" rx="2"/><rect x="13" y="3" width="9" height="6" rx="2"/><rect x="13" y="11" width="9" height="10" rx="2"/><rect x="2" y="15" width="9" height="6" rx="2"/></svg>
+      </span>
+      <span class="tab-label">Dashboard</span>
+    </button>
+    <button class="tab-item" data-tab="1">
+      <span class="tab-icon">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.5" fill="currentColor"/><circle cx="3" cy="12" r="1.5" fill="currentColor"/><circle cx="3" cy="18" r="1.5" fill="currentColor"/></svg>
+      </span>
+      <span class="tab-label">Transactions</span>
+    </button>
+    <button class="tab-item" data-tab="2">
+      <span class="tab-icon">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </span>
+      <span class="tab-label">Analytics</span>
+    </button>
+    <button class="tab-item" data-tab="3">
+      <span class="tab-icon">
+        <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5M19.43 12.97c.04-.32.07-.64.07-.97s-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1s.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66z"/></svg>
+      </span>
+      <span class="tab-label">Settings</span>
+    </button>
+  </div>
+
+  <!-- ADD EXPENSE SHEET -->
+  <div class="sheet-overlay" id="add-sheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-nav">
+        <button class="sheet-btn" onclick="closeAdd()">Cancel</button>
+        <span>New Expense</span>
+        <button class="sheet-btn bold" onclick="saveExpense()">Add</button>
+      </div>
+
+      <div class="amt-display">
+        <span class="amt-currency" id="amt-sym">$</span><span id="amt-disp">0</span>
+      </div>
+
+      <div class="field-group">
+        <div class="field-row">
+          <span>📝</span>
+          <input id="add-note" type="text" placeholder="Note (e.g. Lunch at Chipotle)" autocomplete="off"/>
+        </div>
+        <div class="field-row">
+          <span>🏷️</span>
+          <select id="add-cat">
+            <option>Food</option>
+            <option>Transport</option>
+            <option>Shopping</option>
+            <option>Entertainment</option>
+            <option>Health</option>
+            <option>Utilities</option>
+            <option>Education</option>
+            <option>Travel</option>
+            <option>Groceries</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <span>📅</span>
+          <input id="add-date" type="date"/>
+        </div>
+      </div>
+
+      <div class="keypad" id="keypad"></div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
