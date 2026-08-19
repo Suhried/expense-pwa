@@ -1,35 +1,32 @@
 'use strict';
 
-// ── DB ──────────────────────────────────────────────────────────────────────
+// ── DB ───────────────────────────────────────────────────────────────────────
 const DB = {
-  _data: null,
-  KEY: 'et_expenses_v2',
+  KEY: 'et_v3',
+  _d: null,
   load() {
-    try { this._data = JSON.parse(localStorage.getItem(this.KEY)) || []; }
-    catch { this._data = []; }
-    if (!this._data.length) this._seed();
-    return this._data;
+    try { this._d = JSON.parse(localStorage.getItem(this.KEY)) || []; }
+    catch { this._d = []; }
+    if (!this._d.length) this._seed();
+    return this._d;
   },
-  save() { localStorage.setItem(this.KEY, JSON.stringify(this._data)); },
-  all() { return this._data; },
-  add(exp) { this._data.unshift(exp); this.save(); },
-  remove(id) { this._data = this._data.filter(e => e.id !== id); this.save(); },
+  save() { localStorage.setItem(this.KEY, JSON.stringify(this._d)); },
+  all() { return this._d; },
+  add(e) { this._d.unshift(e); this.save(); },
+  del(id) { this._d = this._d.filter(e => e.id !== id); this.save(); },
   _seed() {
-    const cats = ['Food','Food','Transport','Shopping','Entertainment','Health','Utilities','Food','Shopping','Transport'];
-    const notes = ['Lunch','Morning coffee','Uber ride','Groceries','Netflix','Pharmacy','Electric bill','Dinner','Amazon','Gas'];
+    const rows = [
+      ['Lunch', 'Food', 12.5], ['Uber', 'Transport', 8.0], ['Netflix', 'Entertainment', 15.99],
+      ['Groceries', 'Groceries', 45.3], ['Pharmacy', 'Health', 22.0], ['Coffee', 'Food', 4.5],
+      ['Amazon', 'Shopping', 38.0], ['Electric bill', 'Utilities', 60.0], ['Dinner out', 'Food', 32.0],
+      ['Bus pass', 'Transport', 18.0], ['Gym', 'Health', 30.0], ['Books', 'Education', 25.0],
+    ];
     const now = new Date();
-    for (let i = 0; i < 20; i++) {
+    rows.forEach(([note, cat, amt], i) => {
       const d = new Date(now);
-      d.setDate(d.getDate() - Math.floor(Math.random() * 28));
-      this._data.push({
-        id: Date.now() - i * 1000,
-        amount: parseFloat((Math.random() * 90 + 5).toFixed(2)),
-        category: cats[i % cats.length],
-        note: notes[i % notes.length],
-        date: d.toISOString().split('T')[0]
-      });
-    }
-    this._data.sort((a, b) => b.date.localeCompare(a.date));
+      d.setDate(d.getDate() - Math.floor(i * 2.3));
+      this._d.push({ id: Date.now() - i * 3600000, amount: amt, category: cat, note, date: d.toISOString().split('T')[0] });
+    });
     this.save();
   }
 };
@@ -38,59 +35,58 @@ const DB = {
 const CATS = {
   Food:          { emoji: '🍔', color: '#FF9500' },
   Transport:     { emoji: '🚌', color: '#007AFF' },
-  Shopping:      { emoji: '🛍️',  color: '#FF2D55' },
+  Shopping:      { emoji: '🛍️', color: '#FF2D55' },
   Entertainment: { emoji: '🎬', color: '#AF52DE' },
-  Health:        { emoji: '💊', color: '#34C759' },
+  Health:        { emoji: '💊', color: '#30D158' },
   Utilities:     { emoji: '💡', color: '#5AC8FA' },
   Education:     { emoji: '📚', color: '#FF6B6B' },
-  Travel:        { emoji: '✈️',  color: '#5856D6' },
-  Groceries:     { emoji: '🛒', color: '#FF9500' },
+  Travel:        { emoji: '✈️', color: '#5856D6' },
+  Groceries:     { emoji: '🛒', color: '#FF9F0A' },
   Other:         { emoji: '📦', color: '#8E8E93' },
 };
-function catInfo(name) { return CATS[name] || CATS.Other; }
+function ci(name) { return CATS[name] || CATS.Other; }
 
 // ── CURRENCY ─────────────────────────────────────────────────────────────────
-const CURRENCIES = { USD:'$', BDT:'৳', EUR:'€', GBP:'£', JPY:'¥', INR:'₹' };
+const SYMS = { USD:'$', BDT:'৳', EUR:'€', GBP:'£', JPY:'¥', INR:'₹' };
 let currency = localStorage.getItem('et_currency') || 'USD';
-function sym() { return CURRENCIES[currency] || '$'; }
-function fmt(n) { return sym() + Number(n).toFixed(2); }
-function fmtS(n) { return n >= 1000 ? sym() + (n/1000).toFixed(1) + 'k' : sym() + Math.round(n); }
+const sym = () => SYMS[currency] || '$';
+const fmt = n => sym() + Number(n).toFixed(2);
+const fmtS = n => n >= 1000 ? sym() + (n/1000).toFixed(1) + 'k' : sym() + Math.round(n);
 
-// ── STATE ────────────────────────────────────────────────────────────────────
-let currentTab = 0;
-let txnFilter = 'all';
-let searchQ = '';
-let amtStr = '';
-let addDate = today();
-
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 function today() { return new Date().toISOString().split('T')[0]; }
+function fmtDate(ds) {
+  const t = today();
+  const yd = new Date(); yd.setDate(yd.getDate()-1);
+  const yds = yd.toISOString().split('T')[0];
+  if (ds === t) return 'Today';
+  if (ds === yds) return 'Yesterday';
+  const d = new Date(ds + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
-// ── INIT ─────────────────────────────────────────────────────────────────────
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let txnFilter = 'all', searchQ = '';
+
+// ── BOOT ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   DB.load();
-  updateClock();
-  setInterval(updateClock, 15000);
   renderAll();
   bindTabs();
-  buildKeypad();
-  bindAdd();
   bindSettings();
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  }
+  document.getElementById('add-date').value = today();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 });
-
-function updateClock() {
-  const d = new Date();
-  const h = d.getHours() % 12 || 12;
-  const m = String(d.getMinutes()).padStart(2, '0');
-  document.getElementById('clock').textContent = `${h}:${m}`;
-}
 
 function renderAll() {
   renderDashboard();
   renderTransactions();
   renderAnalytics();
+  updateSymbols();
+}
+
+function updateSymbols() {
+  document.getElementById('hero-sym').textContent = sym();
 }
 
 // ── TABS ─────────────────────────────────────────────────────────────────────
@@ -99,98 +95,101 @@ function bindTabs() {
     el.addEventListener('click', () => switchTab(+el.dataset.tab));
   });
 }
-
 function switchTab(n) {
-  currentTab = n;
-  document.querySelectorAll('.screen').forEach((s, i) => s.classList.toggle('active', i === n));
-  document.querySelectorAll('.tab-item').forEach((t, i) => t.classList.toggle('active', i === n));
-  if (n === 0) renderDashboard();
-  if (n === 1) renderTransactions();
-  if (n === 2) renderAnalytics();
+  document.querySelectorAll('.screen').forEach((s,i) => s.classList.toggle('active', i===n));
+  document.querySelectorAll('.tab-item').forEach((t,i) => t.classList.toggle('active', i===n));
+  // hide FAB on settings
+  document.querySelector('.fab').style.display = n === 3 ? 'none' : 'flex';
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard() {
   const exps = DB.all();
+  const DAY_MS = 86400000;
   const now = new Date();
-  const t = today();
-  const todayAmt = exps.filter(e => e.date === t).reduce((s, e) => s + e.amount, 0);
-  const monthExps = exps.filter(e => {
-    const d = new Date(e.date + 'T12:00:00');
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  });
-  const monthAmt = monthExps.reduce((s, e) => s + e.amount, 0);
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-  document.getElementById('hero-month').textContent = fmt(monthAmt);
-  document.getElementById('hero-today').textContent = fmt(todayAmt);
-  document.getElementById('hero-count').textContent = exps.length;
-
-  // Sparkline
-  const bars = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
+  // Build 7-day data starting from Sunday of this week
+  const todayD = new Date(today() + 'T12:00:00');
+  const dayOfWeek = todayD.getDay(); // 0=Sun
+  const weekDays = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(todayD);
+    d.setDate(d.getDate() - dayOfWeek + i);
     const ds = d.toISOString().split('T')[0];
-    bars.push(exps.filter(e => e.date === ds).reduce((s, e) => s + e.amount, 0));
+    const total = exps.filter(e => e.date === ds).reduce((s,e)=>s+e.amount, 0);
+    weekDays.push({ ds, label: dayNames[d.getDay()], total, isToday: ds === today() });
   }
-  const mx = Math.max(...bars, 1);
-  document.getElementById('sparkline').innerHTML = bars
-    .map(v => `<div class="spark-bar" style="height:${Math.max(3, Math.round(v/mx*32))}px"></div>`).join('');
 
-  // Categories
-  const catTotals = {};
-  monthExps.forEach(e => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
-  const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-  const catEl = document.getElementById('cat-list');
+  const weekTotal = weekDays.reduce((s,d)=>s+d.total, 0);
+  document.getElementById('hero-val').textContent = weekTotal.toFixed(2);
+
+  // Chart grid lines
+  const mx = Math.max(...weekDays.map(d=>d.total), 1);
+  const gridSteps = [0, Math.round(mx*0.5/10)*10, Math.round(mx/10)*10].filter((v,i,a)=>a.indexOf(v)===i);
+  document.getElementById('chart-grid').innerHTML = [200,150,100,50,0].map(v =>
+    `<div class="grid-line"><span class="grid-val">${v <= mx ? v : ''}</span></div>`
+  ).join('');
+
+  // Bars
+  document.getElementById('bars-row').innerHTML = weekDays.map(({ total, isToday }) => {
+    const h = mx > 0 ? Math.max(3, Math.round(total/mx * 130)) : 3;
+    return `<div class="bar-col">
+      <div class="bar-fill ${isToday?'today':'other'}" style="height:${h}px"></div>
+    </div>`;
+  }).join('');
+
+  // Day labels
+  document.getElementById('days-row').innerHTML = weekDays.map(({ label }) =>
+    `<div class="day-lbl">${label}</div>`
+  ).join('');
+
+  // Group recent expenses by date
+  const sorted = [...exps].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  const groups = {};
+  sorted.slice(0, 15).forEach(e => { (groups[e.date]||(groups[e.date]=[])).push(e); });
+
+  const el = document.getElementById('dash-groups');
   if (!sorted.length) {
-    catEl.innerHTML = '<div class="list-row" style="color:var(--label2)">No expenses this month</div>';
-  } else {
-    catEl.innerHTML = sorted.map(([cat, amt]) => {
-      const { emoji, color } = catInfo(cat);
-      const pct = monthAmt > 0 ? Math.round(amt / monthAmt * 100) : 0;
-      return `<div class="list-row">
-        <div class="cat-icon" style="background:${color}22">${emoji}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:16px;font-weight:500">${cat}</div>
-          <div class="prog-wrap"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:16px;font-weight:500">${fmt(amt)}</div>
-          <div style="font-size:12px;color:var(--label2)">${pct}%</div>
-        </div>
-      </div>`;
-    }).join('');
+    el.innerHTML = '<div class="empty"><div class="empty-icon">💸</div><p>No expenses yet</p></div>';
+    return;
   }
+  el.innerHTML = Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0])).map(([ds, items]) => `
+    <div class="section-title">${fmtDate(ds)}</div>
+    ${items.map(e => expRowHTML(e)).join('')}
+  `).join('');
 
-  // Recent
-  const recent = [...exps].sort((a, b) => b.id - a.id).slice(0, 5);
-  const recEl = document.getElementById('recent-list');
-  if (!recent.length) {
-    recEl.innerHTML = '<div class="list-row" style="color:var(--label2)">No expenses yet — tap + to add</div>';
-  } else {
-    recEl.innerHTML = recent.map(e => expRow(e)).join('');
-  }
+  // Bind delete buttons
+  bindDeleteBtns();
 }
 
-function expRow(e) {
-  const { emoji, color } = catInfo(e.category);
-  return `<div class="list-row">
-    <div class="cat-icon" style="background:${color}22">${emoji}</div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.note || e.category}</div>
-      <div style="font-size:13px;color:var(--label2)">${e.category} · ${fmtDate(e.date)}</div>
+function expRowHTML(e) {
+  const { emoji, color } = ci(e.category);
+  return `<div class="exp-row" id="row-${e.id}">
+    <div class="exp-icon">
+      <svg width="22" height="16" fill="none" viewBox="0 0 24 18">
+        <rect x="1" y="3" width="22" height="14" rx="3" stroke="white" stroke-width="1.5"/>
+        <path d="M1 7h22" stroke="white" stroke-width="1.5"/>
+        <rect x="4" y="11" width="4" height="2" rx="1" fill="white"/>
+      </svg>
     </div>
-    <div style="font-size:16px;font-weight:600;flex-shrink:0">${fmt(e.amount)}</div>
+    <div class="exp-info">
+      <div class="exp-title">${e.note || e.category}</div>
+      <div class="exp-date">${fmtDate(e.date)}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="exp-amount">${fmt(e.amount)}</div>
+      <button onclick="delExp(${e.id})" style="width:26px;height:26px;border-radius:50%;border:none;background:rgba(255,68,58,0.2);color:#FF453A;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>
+    </div>
   </div>`;
 }
 
-function fmtDate(ds) {
-  const t = today();
-  const yd = new Date(); yd.setDate(yd.getDate() - 1);
-  const yds = yd.toISOString().split('T')[0];
-  if (ds === t) return 'Today';
-  if (ds === yds) return 'Yesterday';
-  const d = new Date(ds + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function bindDeleteBtns() {} // inline onclick handles it
+
+function delExp(id) {
+  DB.del(id);
+  renderAll();
+  toast('Deleted');
 }
 
 // ── TRANSACTIONS ──────────────────────────────────────────────────────────────
@@ -198,139 +197,102 @@ function renderTransactions() {
   let exps = [...DB.all()];
   const now = new Date();
   if (txnFilter === 'week') {
-    const wk = new Date(); wk.setDate(wk.getDate() - 7);
-    exps = exps.filter(e => new Date(e.date + 'T12:00:00') >= wk);
+    const wk = new Date(); wk.setDate(wk.getDate()-7);
+    exps = exps.filter(e => new Date(e.date+'T12:00:00') >= wk);
   } else if (txnFilter === 'month') {
     exps = exps.filter(e => {
-      const d = new Date(e.date + 'T12:00:00');
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      const d = new Date(e.date+'T12:00:00');
+      return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
     });
   }
   if (searchQ) {
     const q = searchQ.toLowerCase();
-    exps = exps.filter(e => (e.note || '').toLowerCase().includes(q) || e.category.toLowerCase().includes(q));
+    exps = exps.filter(e => (e.note||'').toLowerCase().includes(q) || e.category.toLowerCase().includes(q));
   }
-  exps.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  exps.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
 
-  // Group by date
   const groups = {};
-  exps.forEach(e => { (groups[e.date] || (groups[e.date] = [])).push(e); });
+  exps.forEach(e => { (groups[e.date]||(groups[e.date]=[])).push(e); });
 
   const el = document.getElementById('txn-groups');
   if (!exps.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">🗂️</div><p>${searchQ ? 'No results found' : 'No expenses yet'}</p></div>`;
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🗂️</div><p>No expenses found</p></div>';
     return;
   }
-
-  el.innerHTML = Object.entries(groups)
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([ds, items]) => {
-      const dayTotal = items.reduce((s, e) => s + e.amount, 0);
-      return `<div class="day-hdr"><span>${fmtDate(ds).toUpperCase()}</span><span>${fmt(dayTotal)}</span></div>
-      <div class="card" style="margin-bottom:4px">
-        ${items.map(e => txnRow(e)).join('')}
-      </div>`;
-    }).join('');
+  el.innerHTML = Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0])).map(([ds, items]) => `
+    <div class="day-group-title">${fmtDate(ds)}</div>
+    ${items.map(e => expRowHTML(e)).join('')}
+  `).join('');
 }
 
-function txnRow(e) {
-  const { emoji, color } = catInfo(e.category);
-  return `<div class="list-row" id="row-${e.id}">
-    <div class="cat-icon" style="background:${color}22">${emoji}</div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.note || e.category}</div>
-      <div style="font-size:13px;color:var(--label2)">${e.category}</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-      <span style="font-size:16px;font-weight:600">${fmt(e.amount)}</span>
-      <button onclick="deleteExp(${e.id})" style="width:28px;height:28px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>
-    </div>
-  </div>`;
+function setFilter(f, btn) {
+  txnFilter = f;
+  document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTransactions();
 }
 
-function deleteExp(id) {
-  DB.remove(id);
-  renderAll();
-  toast('Expense deleted');
-}
+function onSearch(v) { searchQ = v; renderTransactions(); }
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────────
 function renderAnalytics() {
   const exps = DB.all();
   const now = new Date();
-
-  // Daily 7
-  const days7 = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    const ds = d.toISOString().split('T')[0];
-    days7.push({ date: d, ds, total: exps.filter(e => e.date === ds).reduce((s, e) => s + e.amount, 0) });
-  }
-  const mx7 = Math.max(...days7.map(d => d.total), 1);
-  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const t = today();
-
-  document.getElementById('bar-chart').innerHTML = days7.map(({ date, ds, total }) => {
-    const h = Math.max(8, Math.round(total / mx7 * 100));
-    const isToday = ds === t;
-    return `<div class="bar-col">
-      <div class="bar-val">${total > 0 ? fmtS(total) : ''}</div>
-      <div class="bar-fill" style="height:${h}px;background:${isToday ? '#007AFF' : '#007AFF44'}"></div>
-      <div class="bar-day">${days[date.getDay()]}</div>
-    </div>`;
-  }).join('');
-
-  // Stats
   const monthExps = exps.filter(e => {
-    const d = new Date(e.date + 'T12:00:00');
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    const d = new Date(e.date+'T12:00:00');
+    return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
   });
-  const monthAmt = monthExps.reduce((s, e) => s + e.amount, 0);
-  const avgD = days7.reduce((s, d) => s + d.total, 0) / 7;
-  const highD = Math.max(...days7.map(d => d.total), 0);
-  const catTotals = {};
-  exps.forEach(e => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
-  const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-  const topCat = sortedCats[0] ? `${catInfo(sortedCats[0][0]).emoji} ${sortedCats[0][0]}` : '—';
+  const monthAmt = monthExps.reduce((s,e)=>s+e.amount, 0);
 
-  document.getElementById('stat-avg').textContent = fmtS(avgD);
-  document.getElementById('stat-high').textContent = fmtS(highD);
-  document.getElementById('stat-month').textContent = fmtS(monthAmt);
-  document.getElementById('stat-top').textContent = topCat;
+  const days7 = [];
+  for (let i=6;i>=0;i--) {
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const ds=d.toISOString().split('T')[0];
+    days7.push(exps.filter(e=>e.date===ds).reduce((s,e)=>s+e.amount,0));
+  }
+  const avgD = days7.reduce((s,v)=>s+v,0)/7;
+  const highD = Math.max(...days7,0);
+
+  const catTotals = {};
+  exps.forEach(e => { catTotals[e.category]=(catTotals[e.category]||0)+e.amount; });
+  const sortedCats = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+  const topCat = sortedCats[0] ? `${ci(sortedCats[0][0]).emoji} ${sortedCats[0][0]}` : '—';
+
+  document.getElementById('stat-grid').innerHTML = [
+    ['Avg Daily', fmtS(avgD)],
+    ['Highest Day', fmtS(highD)],
+    ['This Month', fmtS(monthAmt)],
+    ['Top Category', topCat],
+  ].map(([l,v]) => `<div class="stat-box"><div class="stat-box-label">${l}</div><div class="stat-box-val" style="font-size:${v.length>8?'16px':'22px'}">${v}</div></div>`).join('');
 
   // Donut
   drawDonut(sortedCats);
-
-  // Legend
-  const total = sortedCats.reduce((s, [, v]) => s + v, 0) || 1;
-  document.getElementById('legend').innerHTML = sortedCats.map(([cat, amt]) => {
-    const { emoji, color } = catInfo(cat);
+  const total = sortedCats.reduce((s,[,v])=>s+v,0)||1;
+  document.getElementById('legend').innerHTML = sortedCats.map(([cat,amt])=>{
+    const { emoji, color } = ci(cat);
     return `<div class="legend-row">
       <div class="legend-dot" style="background:${color}"></div>
       <div style="flex:1;font-size:14px">${emoji} ${cat}</div>
-      <div style="font-size:13px;color:var(--label2);margin-right:10px">${Math.round(amt/total*100)}%</div>
-      <div style="font-size:14px;font-weight:500">${fmt(amt)}</div>
+      <div style="font-size:12px;color:var(--text2);margin-right:10px">${Math.round(amt/total*100)}%</div>
+      <div style="font-size:14px;font-weight:600">${fmt(amt)}</div>
     </div>`;
   }).join('');
 
-  // Monthly trend
+  // Monthly
+  const mNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const months5 = [];
-  const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  for (let i = 4; i >= 0; i--) {
-    const d = new Date(); d.setMonth(d.getMonth() - i);
-    const mExps = exps.filter(e => {
-      const ed = new Date(e.date + 'T12:00:00');
-      return ed.getFullYear() === d.getFullYear() && ed.getMonth() === d.getMonth();
-    });
-    months5.push({ label: mNames[d.getMonth()], total: mExps.reduce((s, e) => s + e.amount, 0) });
+  for(let i=4;i>=0;i--){
+    const d=new Date(); d.setMonth(d.getMonth()-i);
+    const mE=exps.filter(e=>{const ed=new Date(e.date+'T12:00:00');return ed.getFullYear()===d.getFullYear()&&ed.getMonth()===d.getMonth();});
+    months5.push({label:mNames[d.getMonth()],total:mE.reduce((s,e)=>s+e.amount,0)});
   }
-  const mMax = Math.max(...months5.map(m => m.total), 1);
-  document.getElementById('monthly-chart').innerHTML = months5.map(({ label, total }) => {
-    const h = Math.max(4, Math.round(total / mMax * 70));
-    return `<div class="m-col">
-      <div class="m-val">${total > 0 ? fmtS(total) : ''}</div>
-      <div class="m-fill" style="height:${h}px"></div>
-      <div class="m-label">${label}</div>
+  const mMax=Math.max(...months5.map(m=>m.total),1);
+  document.getElementById('monthly-chart').innerHTML=months5.map(({label,total})=>{
+    const h=Math.max(4,Math.round(total/mMax*80));
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end;height:100%">
+      <div style="font-size:9px;color:var(--text2)">${total>0?fmtS(total):''}</div>
+      <div style="width:100%;height:${h}px;border-radius:4px 4px 0 0;background:rgba(48,209,88,0.5)"></div>
+      <div style="font-size:10px;color:var(--text2)">${label}</div>
     </div>`;
   }).join('');
 }
@@ -339,82 +301,55 @@ function drawDonut(sortedCats) {
   const canvas = document.getElementById('donut');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const W = 160, cx = 80, cy = 80, r = 62, ir = 40;
-  ctx.clearRect(0, 0, W, W);
-  const total = sortedCats.reduce((s, [, v]) => s + v, 0) || 1;
-  let angle = -Math.PI / 2;
+  const W=160, cx=80, cy=80, r=62, ir=42;
+  ctx.clearRect(0,0,W,W);
+  const total=sortedCats.reduce((s,[,v])=>s+v,0)||1;
+  let angle=-Math.PI/2;
   if (!sortedCats.length) {
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fillStyle = '#E5E5EA'; ctx.fill();
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle='#3A3A3C';ctx.fill();
   } else {
-    sortedCats.forEach(([cat, amt]) => {
-      const sweep = (amt / total) * Math.PI * 2;
-      ctx.beginPath(); ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, r, angle, angle + sweep);
-      ctx.closePath();
-      ctx.fillStyle = catInfo(cat).color;
-      ctx.fill();
-      angle += sweep;
+    sortedCats.forEach(([cat,amt])=>{
+      const sweep=(amt/total)*Math.PI*2;
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,angle,angle+sweep);ctx.closePath();
+      ctx.fillStyle=ci(cat).color;ctx.fill();
+      angle+=sweep;
     });
   }
-  // Detect dark mode for inner circle
-  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  ctx.beginPath(); ctx.arc(cx, cy, ir, 0, Math.PI*2);
-  ctx.fillStyle = dark ? '#2C2C2E' : '#FFFFFF';
-  ctx.fill();
+  ctx.beginPath();ctx.arc(cx,cy,ir,0,Math.PI*2);ctx.fillStyle='#1C1C1E';ctx.fill();
 }
 
 // ── ADD EXPENSE ───────────────────────────────────────────────────────────────
-function buildKeypad() {
-  const keys = [['1','2','3'],['4','5','6'],['7','8','9'],['.','0','⌫']];
-  document.getElementById('keypad').innerHTML = keys.flat().map(k =>
-    `<button class="key${k==='⌫'||k==='.'?` op`:''}" onclick="keyPress('${k}')">${k}</button>`
-  ).join('');
-}
-
-function keyPress(k) {
-  if (k === '⌫') { amtStr = amtStr.slice(0, -1); }
-  else if (k === '.') { if (!amtStr.includes('.')) amtStr += amtStr === '' ? '0.' : '.'; }
-  else { if (amtStr.length < 9) amtStr += k; }
-  updateAmtDisplay();
-}
-
-function updateAmtDisplay() {
-  const v = amtStr || '0';
-  document.getElementById('amt-disp').textContent = v;
-}
-
-function bindAdd() {
-  document.getElementById('add-sheet').addEventListener('click', e => {
-    if (e.target === document.getElementById('add-sheet')) closeAdd();
-  });
-  // date default
-  document.getElementById('add-date').value = today();
-}
-
 function openAdd() {
-  amtStr = '';
-  updateAmtDisplay();
-  document.getElementById('add-note').value = '';
+  document.getElementById('add-title').value = '';
+  document.getElementById('add-amount').value = '';
   document.getElementById('add-cat').value = 'Food';
   document.getElementById('add-date').value = today();
-  document.getElementById('add-sheet').classList.add('open');
+  document.getElementById('add-modal').classList.add('open');
+  setTimeout(() => document.getElementById('add-title').focus(), 350);
 }
 
 function closeAdd() {
-  document.getElementById('add-sheet').classList.remove('open');
+  document.getElementById('add-modal').classList.remove('open');
 }
 
 function saveExpense() {
-  const amt = parseFloat(amtStr);
-  if (!amt || amt <= 0) {
-    document.getElementById('amt-disp').style.color = 'var(--red)';
-    setTimeout(() => document.getElementById('amt-disp').style.color = '', 600);
+  const title = document.getElementById('add-title').value.trim();
+  const amt = parseFloat(document.getElementById('add-amount').value);
+  const cat = document.getElementById('add-cat').value || 'Other';
+  const date = document.getElementById('add-date').value || today();
+
+  if (!title) {
+    document.getElementById('add-title').style.borderBottom = '1px solid #FF453A';
+    setTimeout(()=>document.getElementById('add-title').style.borderBottom='',1500);
     return;
   }
-  const cat = document.getElementById('add-cat').value || 'Other';
-  const note = document.getElementById('add-note').value.trim() || cat;
-  const date = document.getElementById('add-date').value || today();
-  DB.add({ id: Date.now(), amount: amt, category: cat, note, date });
+  if (!amt || amt <= 0) {
+    document.getElementById('add-amount').style.color = '#FF453A';
+    setTimeout(()=>document.getElementById('add-amount').style.color='',1500);
+    return;
+  }
+
+  DB.add({ id: Date.now(), amount: amt, category: cat, note: title, date });
   closeAdd();
   renderAll();
   toast('Expense added ✓');
@@ -422,8 +357,9 @@ function saveExpense() {
 
 // ── SETTINGS ─────────────────────────────────────────────────────────────────
 function bindSettings() {
-  document.getElementById('currency-select').value = currency;
-  document.getElementById('currency-select').addEventListener('change', e => {
+  const sel = document.getElementById('currency-select');
+  sel.value = currency;
+  sel.addEventListener('change', e => {
     currency = e.target.value;
     localStorage.setItem('et_currency', currency);
     renderAll();
@@ -435,10 +371,10 @@ function bindSettings() {
 }
 
 function exportCSV() {
-  const rows = ['Date,Amount,Category,Note',
-    ...DB.all().map(e => `${e.date},${e.amount},${e.category},"${(e.note||'').replace(/"/g,'""')}"`)
+  const rows = ['Date,Amount,Category,Title',
+    ...DB.all().map(e=>`${e.date},${e.amount},${e.category},"${(e.note||'').replace(/"/g,'""')}"`)
   ];
-  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `expenses_${today()}.csv`;
@@ -448,31 +384,18 @@ function exportCSV() {
 
 function clearAllData() {
   if (!confirm('Delete all expense data? This cannot be undone.')) return;
-  localStorage.removeItem('et_expenses_v2');
-  DB._data = [];
+  localStorage.removeItem('et_v3');
+  DB._d = [];
   renderAll();
   toast('All data cleared');
 }
 
-// ── SEARCH / FILTER ───────────────────────────────────────────────────────────
-function setFilter(f, btn) {
-  txnFilter = f;
-  document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderTransactions();
-}
-
-function onSearch(val) {
-  searchQ = val;
-  renderTransactions();
-}
-
-// ── TOAST ────────────────────────────────────────────────────────────────────
-let _toastTimer;
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+let _tt;
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  clearTimeout(_tt);
+  _tt = setTimeout(() => el.classList.remove('show'), 2200);
 }
