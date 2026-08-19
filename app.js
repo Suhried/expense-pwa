@@ -127,9 +127,7 @@ function renderDashboard() {
   // Chart grid lines
   const mx = Math.max(...weekDays.map(d=>d.total), 1);
   const gridSteps = [0, Math.round(mx*0.5/10)*10, Math.round(mx/10)*10].filter((v,i,a)=>a.indexOf(v)===i);
-  document.getElementById('chart-grid').innerHTML = [200,150,100,50,0].map(v =>
-    `<div class="grid-line"><span class="grid-val">${v <= mx ? v : ''}</span></div>`
-  ).join('');
+  document.getElementById('chart-grid').innerHTML = '';
 
   // Bars
   document.getElementById('bars-row').innerHTML = weekDays.map(({ total, isToday }) => {
@@ -151,7 +149,7 @@ function renderDashboard() {
 
   const el = document.getElementById('dash-groups');
   if (!sorted.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">💸</div><p>No expenses yet</p></div>';
+    el.innerHTML = '<div style="text-align:center;padding:30px 20px;color:var(--text2)"><div style="font-size:40px;margin-bottom:8px">💸</div><p style="font-size:15px">No expenses yet — tap + to add</p></div>';
     return;
   }
   el.innerHTML = Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0])).map(([ds, items]) => `
@@ -335,7 +333,7 @@ function closeAdd() {
 function saveExpense() {
   const title = document.getElementById('add-title').value.trim();
   const amt = parseFloat(document.getElementById('add-amount').value);
-  const cat = document.getElementById('add-cat').value || 'Other';
+  const cat = 'Other';
   const date = document.getElementById('add-date').value || today();
 
   if (!title) {
