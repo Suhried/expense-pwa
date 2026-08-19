@@ -2,11 +2,10 @@
   "name": "Expense Tracker",
   "short_name": "Expenses",
   "description": "Track your daily expenses natively",
-  "start_url": "/expense-pwa/",
-  "scope": "/expense-pwa/",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#F2F2F7",
+  "theme_color": "#007AFF",
   "orientation": "portrait",
   "icons": [
     {
